@@ -20,7 +20,7 @@ router.post('/verify-student', async (req, res) => {
   try {
     const { searchTerm } = req.body
 
-    // --- VALIDAÇÃO ---
+    // --- INÍCIO VALIDAÇÃO ---
     if (!searchTerm || typeof searchTerm !== 'string' || searchTerm.trim().length === 0) {
       console.log('❌ Termo de busca inválido ou não fornecido')
       return res.status(400).json({
@@ -58,15 +58,16 @@ router.post('/verify-student', async (req, res) => {
   }
 })
 
-// --- ROTA /status ATUALIZADA ---
+// GET /api/status - para checar status do rate limit e autenticação
 router.get('/status', async (req, res) => {
   const clientIP = getClientIP(req)
   
-  // Tornadas 'async' para funcionar com Redis
+  // Verifica os limites e o status de autenticação
   const techLimit = await rateLimiter.checkTechnicalLimit(clientIP)
   const businessLimit = await rateLimiter.checkBusinessLimit()
   const token = await jacadAuth.getValidToken()
   
+  // Retorna o status
   res.json({
     success: true,
     data: {

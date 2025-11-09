@@ -12,19 +12,17 @@ class JacadAPI {
   }
 
   async makeRequest(config, ip = 'unknown') {
-    // --- MUDANÇA AQUI: Adicionado 'await' ---
     const techLimit = await rateLimiter.checkTechnicalLimit(ip)
     if (!techLimit.allowed) {
       throw new Error(`Rate limit técnico excedido. Tente novamente em ${techLimit.retryAfter} segundos`)
     }
 
-    // --- MUDANÇA AQUI: Adicionado 'await' ---
     const businessLimit = await rateLimiter.checkBusinessLimit()
     if (!businessLimit.allowed) {
       throw new Error(`Rate limit de negócio excedido. Tente novamente em ${businessLimit.retryAfter} segundos`)
     }
 
-    // Obtém token válido (já era async)
+    // Pega um token válido
     const token = await jacadAuth.getValidToken()
     
     const requestConfig = {

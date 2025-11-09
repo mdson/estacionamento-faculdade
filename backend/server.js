@@ -6,15 +6,13 @@ const app = express()
 app.set('trust proxy', 1) // Confia no primeiro proxy (essencial para req.ip)
 const PORT = process.env.PORT || 5000
 
-// --- Configuração do CORS ---
 const allowedOrigins = [
-  // Adicione a URL do seu frontend da Vercel quando tiver
-  // Ex: 'https://estacionamento-faculdade-XXXX.vercel.app'
+  'https://estacionamento-faculdade.vercel.app/' // URL oficial do frontend
 ];
 
-// Permitir localhost em ambiente de desenvolvimento
+// Permitir localhost em desenvolvimento
 if (process.env.NODE_ENV !== 'production') {
-  allowedOrigins.push('http://localhost:3000'); // Porta padrão do Next.js
+  allowedOrigins.push('http://localhost:3000');
 }
 
 const corsOptions = {
@@ -38,7 +36,6 @@ app.use((req, res, next) => {
   next()
 })
 
-// --- Rota /health ATUALIZADA ---
 // Health check
 app.get('/health', async (req, res) => {
   const jacadAuth = require('./config/jacad-auth')
@@ -51,10 +48,10 @@ app.get('/health', async (req, res) => {
   })
 })
 
-// Routes
+// Rotas da API
 app.use('/api', require('./routes/student'))
 
-// Error handling
+// Tratamento global de erros
 app.use((err, req, res, next) => {
   console.error('💥 Erro não tratado:', err)
   res.status(500).json({ 
@@ -63,6 +60,7 @@ app.use((err, req, res, next) => {
   })
 })
 
+// Inicia o servidor
 app.listen(PORT, () => {
   console.log('🚀 ========================================')
   console.log('🚀 Servidor Controle Estacionamento FSH')

@@ -56,7 +56,7 @@ class JacadAuth {
   }
 
   async getValidToken() {
-    // 1. Tenta pegar o token do Redis
+    //tenta pegar o token do Redis
     const token = await runRedisCommand(async (client) => {
       return await client.get(TOKEN_KEY)
     });
@@ -66,9 +66,7 @@ class JacadAuth {
       return token
     }
 
-    // 2. Se não tem token, precisamos autenticar.
-    // Usamos o "lock" (authPromise) para evitar que 10 requisições
-    // simultâneas tentem autenticar 10 vezes.
+    // Se não houver token válido, inicia o processo de autenticação
     if (!this.authPromise) {
       console.log('⏳ Token expirado/inexistente. Iniciando autenticação...')
       this.authPromise = this.authenticate().finally(() => {
@@ -78,7 +76,7 @@ class JacadAuth {
       console.log('⌛ Aguardando autenticação em progresso...')
     }
 
-    // Aguarda a autenticação (a nova ou a que já estava em andamento)
+    // Aguarda a autenticação e retorna o token obtido, seja de uma nova chamada ou da promise existente.
     return await this.authPromise
   }
 }
