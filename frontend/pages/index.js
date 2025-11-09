@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import axios from 'axios'
+import Head from 'next/head'
 
 export default function Home() {
   const [searchTerm, setSearchTerm] = useState('') // estado para o RA ou Nome digitado
@@ -51,6 +52,10 @@ export default function Home() {
   return (
     <div className="relative min-h-screen bg-gray-100 flex flex-col items-center justify-start p-4 sm:p-8">
       
+      <Head>
+        <title>Controle de Estacionamento - FSH</title>
+      </Head>
+
       {/* logo da fsh */}
       <div className="absolute top-4 right-4 sm:top-8 sm:right-8">
         <img
