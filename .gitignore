@@ -1,0 +1,28 @@
+# Backend (Node.js)
+backend/node_modules
+backend/.env
+backend/npm-debug.log*
+backend/yarn-debug.log*
+backend/yarn-error.log*
+backend/.pnpm-debug.log*
+backend/.env*
+
+# Frontend (Next.js)
+frontend/node_modules
+frontend/.next
+frontend/out
+frontend/next-env.d.ts
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+frontend/.env*
+frontend/.DS_Store
+frontend/*.pem
+frontend/npm-debug.log*
+
+# Arquivos de Sistema
+.DS_Store
+*.pem
+.vercel
