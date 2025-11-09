@@ -1,27 +1,24 @@
 const axios = require('axios')
+const { runRedisCommand } = require('./redis-client')
+
+// Chave para salvar o token no Redis
+const TOKEN_KEY = 'jacad_token'
 
 class JacadAuth {
   constructor() {
-    this.baseURL = process.env.JACAD_BASE_URL || 'https://fsh-developer.jacad.com.br/api/v1'
+    this.baseURL = process.env.JACAD_BASE_URL
+    this.apiKey = process.env.JACAD_ACCESS_TOKEN
+    this.authPromise = null // Lock para evitar autenticações simultâneas
 
-    this.apiKey = process.env.JACAD_ACCESS_TOKEN;
     if (!this.apiKey) {
-       console.error('❌ ERRO FATAL: Variável de ambiente JACAD_ACCESS_TOKEN não definida!');
-       process.exit(1);
+      console.error('❌ ERRO FATAL: JACAD_ACCESS_TOKEN não definida!')
+      process.exit(1)
     }
-    
-    this.currentToken = null
-    this.tokenExpiry = null
-    this.refreshTimeout = null
   }
 
   async authenticate() {
-    if (!this.apiKey) {
-         throw new Error('Falha na autenticação: JACAD_ACCESS_TOKEN não configurado.');
-    }
+    console.log('🔐 Autenticando com JACAD API...')
     try {
-      console.log('🔐 Autenticando com JACAD API...')
-      
       const response = await axios.post(`${this.baseURL}/auth/token`, {}, {
         headers: {
           'token': this.apiKey,
@@ -30,81 +27,59 @@ class JacadAuth {
         timeout: 10000
       })
 
-      console.log('🕵️‍♂️ DEBUG: Valor bruto de expiresIn recebido da API:', response.data.expiresIn);
-      console.log('🕵️‍♂️ DEBUG: Tipo de expiresIn:', typeof response.data.expiresIn);
-
       if (response.data && response.data.token) {
-        this.currentToken = response.data.token
-        this.tokenExpiry = new Date(response.data.expiresIn)
+        const token = response.data.token
+        const expiryDate = new Date(response.data.expiresIn)
         
-        console.log('✅ Autenticação bem-sucedida!')
-        console.log(`📅 Token expira em: ${this.tokenExpiry}`)
+        // Calcula 5 minutos antes de expirar
+        const expiresInSeconds = Math.floor((expiryDate.getTime() - Date.now()) / 1000) - 300
         
-        // Agenda renovação automática (1 hora antes da expiração)
-        this.scheduleTokenRefresh()
-        return true
+        if (expiresInSeconds <= 0) {
+          throw new Error('Token recebido da API já está expirado ou muito próximo de expirar.')
+        }
+
+        // Salva o token no Redis com expiração
+        await runRedisCommand(async (client) => {
+          await client.set(TOKEN_KEY, token, { EX: expiresInSeconds })
+        });
+
+        console.log('✅ Autenticação bem-sucedida e salva no Redis!')
+        return token
       }
       
       throw new Error('Token não recebido na resposta')
-      
+
     } catch (error) {
-      console.error('❌ Erro na autenticação:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status
-      })
-
-      if (error.response?.status === 401 || error.response?.status === 403 || !this.apiKey) {
-        throw new Error('Falha na autenticação com JACAD (Verifique o Token ou permissões)');
-      } else {
-         console.error('Erro temporário na autenticação, tentará novamente mais tarde.');
-         return false; // Indica que a autenticação falhou, mas pode tentar de novo
-      }
-
-    }
-  }
-
-  scheduleTokenRefresh() {
-    const expiryTime = this.tokenExpiry.getTime()
-    const now = Date.now()
-    const timeUntilExpiry = expiryTime - now
-    
-    // Renova 5 minutos antes da expiração
-    const refreshTime = timeUntilExpiry - (5 * 60 * 1000)
-    
-    if (this.refreshTimeout) {
-      clearTimeout(this.refreshTimeout)
-    }
-
-    if (refreshTime > 0) {
-      this.refreshTimeout = setTimeout(() => {
-        console.log('🔄 Renovando token automaticamente...')
-        this.authenticate()
-      }, refreshTime)
-      
-      console.log(`⏰ Token será renovado em ${Math.round(refreshTime / 60000)} minutos`)
+      console.error('❌ Erro na autenticação:', error.message)
+      throw new Error('Falha na autenticação com JACAD (Verifique o Token).')
     }
   }
 
   async getValidToken() {
-    // Se não tem token ou expirou, autentica
-    if (!this.currentToken || this.isTokenExpired()) {
-      await this.authenticate()
-    }
-    return this.currentToken
-  }
+    // 1. Tenta pegar o token do Redis
+    const token = await runRedisCommand(async (client) => {
+      return await client.get(TOKEN_KEY)
+    });
 
-  isTokenExpired() {
-    if (!this.tokenExpiry) return true
-    // Considera expirado 5 minutos antes para ter margem de segurança
-    return Date.now() >= this.tokenExpiry.getTime() - (5 * 60 * 1000) 
-  }
-
-  getAuthHeaders() {
-    return {
-      'Authorization': `Bearer ${this.currentToken}`,
-      'Content-Type': 'application/json'
+    if (token) {
+      // console.log('✅ Token recuperado do Redis')
+      return token
     }
+
+    // 2. Se não tem token, precisamos autenticar.
+    // Usamos o "lock" (authPromise) para evitar que 10 requisições
+    // simultâneas tentem autenticar 10 vezes.
+    if (!this.authPromise) {
+      console.log('⏳ Token expirado/inexistente. Iniciando autenticação...')
+      this.authPromise = this.authenticate().finally(() => {
+        this.authPromise = null // Limpa a promise após resolver
+      })
+    } else {
+      console.log('⌛ Aguardando autenticação em progresso...')
+    }
+
+    // Aguarda a autenticação (a nova ou a que já estava em andamento)
+    return await this.authPromise
   }
 }
 

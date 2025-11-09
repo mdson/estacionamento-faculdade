@@ -3,26 +3,23 @@ const cors = require('cors')
 require('dotenv').config()
 
 const app = express()
-app.set('trust proxy', 1) // Confia no primeiro proxy
+app.set('trust proxy', 1) // Confia no primeiro proxy (essencial para req.ip)
 const PORT = process.env.PORT || 5000
 
-// Middleware
+// --- Configuração do CORS ---
 const allowedOrigins = [
-  'https://meu-site-fsh.com.br', 
-  'https://www.meu-site-fsh.com.br'
+  // Adicione a URL do seu frontend da Vercel quando tiver
+  // Ex: 'https://estacionamento-faculdade-XXXX.vercel.app'
 ];
 
 // Permitir localhost em ambiente de desenvolvimento
 if (process.env.NODE_ENV !== 'production') {
-  allowedOrigins.push('http://localhost:3000');
+  allowedOrigins.push('http://localhost:3000'); // Porta padrão do Next.js
 }
 
 const corsOptions = {
   origin: function (origin, callback) {
-    
-    // Verifica se a origem da requisição está na nossa lista
     const isAllowed = allowedOrigins.includes(origin);
-
     if (!origin || isAllowed) {
       callback(null, true);
     } else {
@@ -41,48 +38,35 @@ app.use((req, res, next) => {
   next()
 })
 
-// Inicializa autenticação ao iniciar o servidor
-async function initializeServer() {
-  try {
-    const jacadAuth = require('./config/jacad-auth')
-    await jacadAuth.authenticate()
-    
-    console.log('✅ Servidor inicializado com autenticação JACAD')
-    
-    // Routes
-    app.use('/api', require('./routes/student'))
+// --- Rota /health ATUALIZADA ---
+// Health check
+app.get('/health', async (req, res) => {
+  const jacadAuth = require('./config/jacad-auth')
+  const token = await jacadAuth.getValidToken() // Tenta pegar o token
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    service: 'Controle Estacionamento FSH',
+    authenticated: token !== null
+  })
+})
 
-    // Health check
-    app.get('/health', (req, res) => {
-      res.json({ 
-        status: 'OK', 
-        timestamp: new Date().toISOString(),
-        service: 'Controle Estacionamento FSH',
-        authenticated: jacadAuth.currentToken !== null
-      })
-    })
+// Routes
+app.use('/api', require('./routes/student'))
 
-    // Error handling
-    app.use((err, req, res, next) => {
-      console.error('💥 Erro não tratado:', err)
-      res.status(500).json({ 
-        success: false, 
-        message: 'Erro interno do servidor' 
-      })
-    })
+// Error handling
+app.use((err, req, res, next) => {
+  console.error('💥 Erro não tratado:', err)
+  res.status(500).json({ 
+    success: false, 
+    message: 'Erro interno do servidor' 
+  })
+})
 
-    app.listen(PORT, () => {
-      console.log('🚀 ========================================')
-      console.log('🚀 Servidor Controle Estacionamento FSH')
-      console.log(`🚀 Porta: ${PORT}`)
-      console.log(`🚀 Token: ${jacadAuth.currentToken ? '✅ Válido' : '❌ Inválido'}`)
-      console.log('🚀 ========================================')
-    })
-
-  } catch (error) {
-    console.error('❌ Falha na inicialização do servidor:', error.message)
-    process.exit(1)
-  }
-}
-
-initializeServer()
+app.listen(PORT, () => {
+  console.log('🚀 ========================================')
+  console.log('🚀 Servidor Controle Estacionamento FSH')
+  console.log(`🚀 Porta: ${PORT}`)
+  console.log(`🚀 Modo: ${process.env.NODE_ENV || 'não definido'}`)
+  console.log('🚀 ========================================')
+})

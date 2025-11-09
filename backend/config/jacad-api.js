@@ -12,18 +12,19 @@ class JacadAPI {
   }
 
   async makeRequest(config, ip = 'unknown') {
-    // Verifica rate limits
-    const techLimit = rateLimiter.checkTechnicalLimit(ip)
+    // --- MUDANÇA AQUI: Adicionado 'await' ---
+    const techLimit = await rateLimiter.checkTechnicalLimit(ip)
     if (!techLimit.allowed) {
       throw new Error(`Rate limit técnico excedido. Tente novamente em ${techLimit.retryAfter} segundos`)
     }
 
-    const businessLimit = rateLimiter.checkBusinessLimit()
+    // --- MUDANÇA AQUI: Adicionado 'await' ---
+    const businessLimit = await rateLimiter.checkBusinessLimit()
     if (!businessLimit.allowed) {
       throw new Error(`Rate limit de negócio excedido. Tente novamente em ${businessLimit.retryAfter} segundos`)
     }
 
-    // Obtém token válido
+    // Obtém token válido (já era async)
     const token = await jacadAuth.getValidToken()
     
     const requestConfig = {
@@ -48,11 +49,13 @@ class JacadAPI {
 
       // Se for erro de autenticação, tenta renovar o token uma vez
       if (error.response?.status === 401) {
-        console.log('🔄 Token inválido, tentando reautenticar...')
-        await jacadAuth.authenticate()
+        console.log('🔄 Token inválido, tentando reautenticar (forçando)...')
+        // Força a autenticação, limpando o "lock" se houver
+        jacadAuth.authPromise = null
+        const newToken = await jacadAuth.authenticate()
         
         // Tenta novamente com novo token
-        requestConfig.headers.Authorization = `Bearer ${jacadAuth.currentToken}`
+        requestConfig.headers.Authorization = `Bearer ${newToken}`
         const retryResponse = await this.client(requestConfig)
         return retryResponse.data
       }
@@ -61,9 +64,6 @@ class JacadAPI {
     }
   }
 
-  // --- ALTERAÇÃO AQUI ---
-  // A função agora se chama 'searchStudents' (plural)
-  // e aceita um 'searchTerm' genérico (RA ou nome)
   async searchStudents(searchTerm, ip) {
     try {
       console.log(`🔍 Buscando alunos com termo: ${searchTerm}`)
@@ -72,25 +72,18 @@ class JacadAPI {
         method: 'GET',
         url: '/controle-acesso/matriculas-entrada-saida',
         params: {
-          pageSize: 500, // Busca uma página grande
-          descricao: searchTerm // Usa o termo de busca no filtro 'descricao'
+          pageSize: 500, 
+          descricao: searchTerm 
         }
       }, ip)
 
       console.log('📊 Resposta da API:', JSON.stringify(data, null, 2))
 
-      // Se 'elements' existir e não estiver vazio, mapeia os resultados
       if (data.elements && data.elements.length > 0) {
         
-        // --- ALTERAÇÃO AQUI ---
-        // Usamos .map() para transformar a lista da API
-        // em uma lista padronizada para o nosso frontend.
         const students = data.elements.map(student => {
-          // A API do JACAD retorna matrícula 'ATIVA' ou 'INATIVA'
-          // Vamos assumir que se ela retornou, é porque existe.
-          // O endpoint "matriculas-entrada-saida" só retorna matrículas ATIVAS.
           return {
-            active: true, // Se está na lista, está ativa
+            active: true, // Endpoint só retorna matrículas ATIVAS
             name: student.nome || 'Nome não disponível',
             ra: student.ra || 'RA indisponível',
             course: student.cursoBase || 'Curso não disponível',
@@ -99,20 +92,17 @@ class JacadAPI {
         })
         
         console.log(`✅ ${students.length} aluno(s) encontrado(s)`)
-        return students // Retorna a LISTA de alunos
+        return students
       }
 
       console.log('❌ Nenhum aluno encontrado na API')
-      return [] // Retorna uma lista vazia se não houver resultados
+      return []
 
     } catch (error) {
       console.error('❌ Erro na API JACAD:', error.message)
       throw new Error(`Falha na comunicação com o sistema: ${error.message}`)
     }
   }
-  // A função searchInCatraca não é mais necessária se 'matriculas-entrada-saida'
-  // já filtra por ativos, mas pode ser mantida como fallback se desejar.
-  // Por simplicidade, ela foi removida desta lógica principal.
 }
 
 module.exports = new JacadAPI()
