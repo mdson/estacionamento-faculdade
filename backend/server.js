@@ -7,7 +7,9 @@ app.set('trust proxy', 1) // Confia no primeiro proxy (essencial para req.ip)
 const PORT = process.env.PORT || 5000
 
 const allowedOrigins = [
-  'https://estacionamento-faculdade.vercel.app/' // URL oficial do frontend
+  'https://estacionamento-faculdade.vercel.app',
+  'https://estacionamento-faculdade-git-main-mdsons-projects.vercel.app',
+  'https://estacionamento-faculdade-lglo8vsvc-mdsons-projects.vercel.app' // URL oficial do frontend
 ];
 
 // Permitir localhost em desenvolvimento
